@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+
+import os
+import argparse
+import logging
+
+parser = argparse.ArgumentParser(description='Shift UID and GID attributes of all objects in a directory tree.')
+parser.add_argument('path', type=str,
+                    help='path to operate on')
+parser.add_argument('uidshift', type=int,
+                    help='will be added on the uid of all objects (use negative value to shift down)')
+parser.add_argument('gidshift', type=int,
+                    help='will be added on the gid of all objects (use negative value to shift down)')
+
+args = parser.parse_args()
+
+uidshift = args.uidshift
+gidshift = args.gidshift
+
+logger = logging.getLogger('shift_uid_gid')
+
+for root, dirs, files, rootfd in os.fwalk(args.path):
+    for relpath in dirs+files:
+        s = os.lstat(relpath, dir_fd=rootfd)
+        newuid = s.st_uid + uidshift
+        newgid = s.st_gid + gidshift
+        try:
+            os.chown(relpath, newuid, newgid, dir_fd=rootfd, follow_symlinks=False)
+        except OverflowError:
+            logger.error("UID/GID too low! path=%s, old_uid=%i, new_uid=%i, old_gid=%i, new_gid=%i" % (os.path.join(root, relpath), s.st_uid, newuid, s.st_gid, newgid))
+
